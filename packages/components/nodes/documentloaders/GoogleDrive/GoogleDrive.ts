@@ -66,20 +66,11 @@ class GoogleDrive_DocumentLoaders implements INode {
         }
         this.inputs = [
             {
-                label: 'Select Files',
-                name: 'selectedFiles',
-                type: 'asyncMultiOptions',
-                loadMethod: 'listFiles',
-                description: 'Select files from your Google Drive',
-                refresh: true,
-                optional: true
-            },
-            {
                 label: 'Include Shared Drives',
                 name: 'includeSharedDrives',
                 type: 'boolean',
                 description:
-                    'Whether to include files from shared drives (Team Drives) that you have access to. Automatically enabled and required when using service account credentials.',
+                    'Whether to include files from shared drives (Team Drives). When using Vertex (Service Account) credentials, this is required and automatically enabled. When using OAuth2 credentials, this is optional and can be toggled on/off.',
                 default: false,
                 optional: true
             },
@@ -87,7 +78,7 @@ class GoogleDrive_DocumentLoaders implements INode {
                 label: 'Shared Drive ID',
                 name: 'sharedDriveId',
                 type: 'string',
-                description: 'Google Drive shared drive (Team Drive) ID. Required when using service account credentials.',
+                description: 'Google Drive shared drive (Team Drive) ID. Required when using Vertex (Service Account) credentials.',
                 placeholder: '0AKxxxxxxxxxxxxxxxxx',
                 optional: true,
                 show: {
@@ -99,8 +90,25 @@ class GoogleDrive_DocumentLoaders implements INode {
                 name: 'folderId',
                 type: 'string',
                 description:
-                    'Google Drive folder ID to load all files from (alternative to selecting specific files). Required when using service account credentials.',
+                    'Google Drive folder ID to load all files from (alternative to selecting specific files). Required when using Vertex (Service Account) credentials.',
                 placeholder: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
+                optional: true
+            },
+            {
+                label: 'Include Subfolders',
+                name: 'includeSubfolders',
+                type: 'boolean',
+                description: 'Whether to include files from subfolders when loading from a folder',
+                default: false,
+                optional: true
+            },
+            {
+                label: 'Select Files',
+                name: 'selectedFiles',
+                type: 'asyncMultiOptions',
+                loadMethod: 'listFiles',
+                description: 'Select files from your Google Drive',
+                refresh: true,
                 optional: true
             },
             {
@@ -155,25 +163,11 @@ class GoogleDrive_DocumentLoaders implements INode {
                 optional: true
             },
             {
-                label: 'Include Subfolders',
-                name: 'includeSubfolders',
-                type: 'boolean',
-                description: 'Whether to include files from subfolders when loading from a folder',
-                default: false,
-                optional: true
-            },
-            {
                 label: 'Max Files',
                 name: 'maxFiles',
                 type: 'number',
                 description: 'Maximum number of files to load (default: 50)',
                 default: 50,
-                optional: true
-            },
-            {
-                label: 'Text Splitter',
-                name: 'textSplitter',
-                type: 'TextSplitter',
                 optional: true
             },
             {
@@ -194,6 +188,12 @@ class GoogleDrive_DocumentLoaders implements INode {
                 placeholder: 'key1, key2, key3.nestedKey1',
                 optional: true,
                 additionalParams: true
+            },
+            {
+                label: 'Text Splitter',
+                name: 'textSplitter',
+                type: 'TextSplitter',
+                optional: true
             }
         ]
         this.outputs = [
@@ -249,7 +249,11 @@ class GoogleDrive_DocumentLoaders implements INode {
         if (googleApplicationCredentialFilePath && !googleApplicationCredential) {
             authOptions.keyFile = googleApplicationCredentialFilePath
         } else if (!googleApplicationCredentialFilePath && googleApplicationCredential) {
-            authOptions.credentials = JSON.parse(googleApplicationCredential)
+            try {
+                authOptions.credentials = JSON.parse(googleApplicationCredential)
+            } catch (e) {
+                throw new Error('Failed to parse Google Application Credential JSON. Please check the format.')
+            }
         }
 
         const projectID = getCredentialParam('projectID', credentialData, nodeData || ({} as INodeData))
@@ -265,20 +269,18 @@ class GoogleDrive_DocumentLoaders implements INode {
         return google.drive({ version: 'v3', auth })
     }
 
-    //@ts-ignore
     loadMethods = {
-        async listFiles(nodeData: INodeData, options: ICommonObject): Promise<INodeOptionsValue[]> {
+        listFiles: async (nodeData: INodeData, options?: ICommonObject): Promise<INodeOptionsValue[]> => {
             const returnData: INodeOptionsValue[] = []
 
             try {
-                let credentialData = await getCredentialData(nodeData.credential ?? '', options)
+                let credentialData = await getCredentialData(nodeData.credential ?? '', options || {})
 
                 // If no credential is selected or credential data is empty, return empty list gracefully
                 if (!nodeData.credential || Object.keys(credentialData).length === 0) {
                     return returnData
                 }
 
-                // @ts-ignore - accessing private method from loadMethods
                 const authMethod = await this.getAuthMethod(credentialData)
 
                 // Get file types from input to filter
@@ -300,7 +302,7 @@ class GoogleDrive_DocumentLoaders implements INode {
 
                 if (authMethod === 'oauth2') {
                     // OAuth2 path
-                    credentialData = await refreshOAuth2Token(nodeData.credential ?? '', credentialData, options)
+                    credentialData = await refreshOAuth2Token(nodeData.credential ?? '', credentialData, options || {})
                     const accessToken = getCredentialParam('access_token', credentialData, nodeData)
 
                     if (!accessToken) {
@@ -340,7 +342,6 @@ class GoogleDrive_DocumentLoaders implements INode {
                         return returnData
                     }
 
-                    // @ts-ignore - accessing private method from loadMethods
                     const drive = await this.getServiceAccountDriveClient(credentialData, nodeData)
 
                     // For service account, we list files from the specified folder in the shared drive
@@ -418,10 +419,10 @@ class GoogleDrive_DocumentLoaders implements INode {
         // Validate required fields based on auth method
         if (authMethod === 'serviceAccount') {
             if (!sharedDriveId) {
-                throw new Error('Shared Drive ID is required when using service account credentials')
+                throw new Error('Shared Drive ID is required')
             }
             if (!folderId) {
-                throw new Error('Folder ID is required when using service account credentials')
+                throw new Error('Folder ID is required')
             }
         } else {
             // OAuth2 validation
@@ -917,7 +918,7 @@ class GoogleDrive_DocumentLoaders implements INode {
         const tempFileName = `gdrive_${Date.now()}_${Math.random().toString(36).substring(7)}${extension}`
         const tempFilePath = path.join(tempDir, tempFileName)
 
-        fs.writeFileSync(tempFilePath, buffer as any)
+        fs.writeFileSync(tempFilePath, buffer as Uint8Array)
         return tempFilePath
     }
 
@@ -957,7 +958,7 @@ class GoogleDrive_DocumentLoaders implements INode {
             return new Promise<Buffer>((resolve, reject) => {
                 const chunks: Buffer[] = []
                 response.data.on('data', (chunk: Buffer) => chunks.push(chunk))
-                response.data.on('end', () => resolve(Buffer.concat(chunks as any)))
+                response.data.on('end', () => resolve(Buffer.concat(chunks as Uint8Array[])))
                 response.data.on('error', reject)
             })
         } else {
@@ -1007,7 +1008,7 @@ class GoogleDrive_DocumentLoaders implements INode {
                 const chunks: Buffer[] = []
                 response.data.on('data', (chunk: Buffer) => chunks.push(chunk))
                 response.data.on('end', () => {
-                    const buffer = Buffer.concat(chunks as any)
+                    const buffer = Buffer.concat(chunks as Uint8Array[])
                     const contentType = response.headers['content-type'] || ''
                     if (!contentType.startsWith('text/') && !contentType.includes('json') && !contentType.includes('xml')) {
                         reject(new Error(`Cannot process binary file with content-type: ${contentType}`))
@@ -1122,7 +1123,7 @@ class GoogleDrive_DocumentLoaders implements INode {
                 response.data.on('data', (chunk: Buffer) => chunks.push(chunk))
                 response.data.on('end', () => {
                     resolve({
-                        buffer: Buffer.concat(chunks as any),
+                        buffer: Buffer.concat(chunks as Uint8Array[]),
                         mimeType: exportMimeType,
                         fileName: `exported_file${fileExtension}`
                     })
