@@ -17,7 +17,6 @@ import * as path from 'path'
 import * as os from 'os'
 import { LoadOfSheet } from '../MicrosoftExcel/ExcelLoader'
 import { PowerpointLoader } from '../MicrosoftPowerpoint/PowerpointLoader'
-// @ts-ignore
 import { google, drive_v3 } from 'googleapis'
 
 // Helper function to get human-readable MIME type labels
@@ -241,7 +240,7 @@ class GoogleDrive_DocumentLoaders implements INode {
 
         if (googleApplicationCredentialFilePath && googleApplicationCredential) {
             throw new Error(
-                'Error: More than one component has been inputted. Please use only one of the following: Google Application Credential File Path or Google Credential JSON Object'
+                'More than one component has been provided. Please use only one of the following: Google Application Credential File Path or Google Credential JSON Object'
             )
         }
 
@@ -552,6 +551,8 @@ class GoogleDrive_DocumentLoaders implements INode {
         authMethod: 'oauth2' | 'serviceAccount',
         driveClient?: drive_v3.Drive
     ): Promise<any> {
+        let fileInfo: any
+
         if (authMethod === 'oauth2' && accessToken) {
             const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}`)
             url.searchParams.append('fields', 'id, name, mimeType, size, createdTime, modifiedTime, parents, webViewLink, driveId')
@@ -572,15 +573,7 @@ class GoogleDrive_DocumentLoaders implements INode {
                 throw new Error(`Failed to get file info: ${response.statusText}`)
             }
 
-            const fileInfo = await response.json()
-
-            // Add drive context to description
-            const driveContext = fileInfo.driveId ? ' (Shared Drive)' : ' (My Drive)'
-
-            return {
-                ...fileInfo,
-                driveContext
-            }
+            fileInfo = await response.json()
         } else if (authMethod === 'serviceAccount' && driveClient) {
             const response = await driveClient.files.get({
                 fileId: fileId,
@@ -592,17 +585,17 @@ class GoogleDrive_DocumentLoaders implements INode {
                 throw new Error('Failed to get file info: No data returned')
             }
 
-            const fileInfo = response.data
-
-            // Add drive context to description
-            const driveContext = fileInfo.driveId ? ' (Shared Drive)' : ' (My Drive)'
-
-            return {
-                ...fileInfo,
-                driveContext
-            }
+            fileInfo = response.data
         } else {
             throw new Error('Invalid authentication method or missing credentials')
+        }
+
+        // Add drive context to description
+        const driveContext = fileInfo.driveId ? ' (Shared Drive)' : ' (My Drive)'
+
+        return {
+            ...fileInfo,
+            driveContext
         }
     }
 
@@ -896,6 +889,20 @@ class GoogleDrive_DocumentLoaders implements INode {
         }
     }
 
+    /**
+     * Converts a Node.js stream to a Buffer
+     * @param stream The stream to convert
+     * @returns A Promise that resolves to a Buffer
+     */
+    private streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
+        return new Promise<Buffer>((resolve, reject) => {
+            const chunks: Buffer[] = []
+            stream.on('data', (chunk: Buffer) => chunks.push(chunk))
+            stream.on('end', () => resolve(Buffer.concat(chunks as Uint8Array[])))
+            stream.on('error', reject)
+        })
+    }
+
     private async createTempFile(buffer: Buffer, fileName: string, mimeType: string): Promise<string> {
         // Get appropriate file extension
         let extension = path.extname(fileName)
@@ -918,7 +925,7 @@ class GoogleDrive_DocumentLoaders implements INode {
         const tempFileName = `gdrive_${Date.now()}_${Math.random().toString(36).substring(7)}${extension}`
         const tempFilePath = path.join(tempDir, tempFileName)
 
-        fs.writeFileSync(tempFilePath, buffer as Uint8Array)
+        fs.writeFileSync(tempFilePath, buffer)
         return tempFilePath
     }
 
@@ -955,12 +962,7 @@ class GoogleDrive_DocumentLoaders implements INode {
                 }
             )
 
-            return new Promise<Buffer>((resolve, reject) => {
-                const chunks: Buffer[] = []
-                response.data.on('data', (chunk: Buffer) => chunks.push(chunk))
-                response.data.on('end', () => resolve(Buffer.concat(chunks as Uint8Array[])))
-                response.data.on('error', reject)
-            })
+            return this.streamToBuffer(response.data)
         } else {
             throw new Error('Invalid authentication method or missing credentials')
         }
@@ -1004,20 +1006,12 @@ class GoogleDrive_DocumentLoaders implements INode {
                 }
             )
 
-            return new Promise<string>((resolve, reject) => {
-                const chunks: Buffer[] = []
-                response.data.on('data', (chunk: Buffer) => chunks.push(chunk))
-                response.data.on('end', () => {
-                    const buffer = Buffer.concat(chunks as Uint8Array[])
-                    const contentType = response.headers['content-type'] || ''
-                    if (!contentType.startsWith('text/') && !contentType.includes('json') && !contentType.includes('xml')) {
-                        reject(new Error(`Cannot process binary file with content-type: ${contentType}`))
-                        return
-                    }
-                    resolve(buffer.toString('utf-8'))
-                })
-                response.data.on('error', reject)
-            })
+            const buffer = await this.streamToBuffer(response.data)
+            const contentType = response.headers['content-type'] || ''
+            if (!contentType.startsWith('text/') && !contentType.includes('json') && !contentType.includes('xml')) {
+                throw new Error(`Cannot process binary file with content-type: ${contentType}`)
+            }
+            return buffer.toString('utf-8')
         } else {
             throw new Error('Invalid authentication method or missing credentials')
         }
@@ -1118,18 +1112,12 @@ class GoogleDrive_DocumentLoaders implements INode {
                 }
             )
 
-            return new Promise<{ buffer: Buffer; mimeType: string; fileName: string }>((resolve, reject) => {
-                const chunks: Buffer[] = []
-                response.data.on('data', (chunk: Buffer) => chunks.push(chunk))
-                response.data.on('end', () => {
-                    resolve({
-                        buffer: Buffer.concat(chunks as Uint8Array[]),
-                        mimeType: exportMimeType,
-                        fileName: `exported_file${fileExtension}`
-                    })
-                })
-                response.data.on('error', reject)
-            })
+            const buffer = await this.streamToBuffer(response.data)
+            return {
+                buffer,
+                mimeType: exportMimeType,
+                fileName: `exported_file${fileExtension}`
+            }
         } else {
             throw new Error('Invalid authentication method or missing credentials')
         }
