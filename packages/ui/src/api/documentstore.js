@@ -1,4 +1,4 @@
-cd import client from './client'
+import client from './client'
 
 const getAllDocumentStores = (params) => client.get('/document-store/store', { params })
 const getDocumentLoaders = () => client.get('/document-store/components/loaders')
