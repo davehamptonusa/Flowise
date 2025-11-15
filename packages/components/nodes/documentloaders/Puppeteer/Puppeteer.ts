@@ -6,6 +6,7 @@ import { omit } from 'lodash'
 import { PuppeteerLifeCycleEvent } from 'puppeteer'
 import { handleEscapeCharacters, INodeOutputsValue, webCrawl, xmlScrape } from '../../../src'
 import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
+import { isSafeBrowserExecutable } from '../../../src/validator'
 
 class Puppeteer_DocumentLoaders implements INode {
     label: string
@@ -183,11 +184,15 @@ class Puppeteer_DocumentLoaders implements INode {
                 let docs: Document[] = []
 
                 const executablePath = process.env.PUPPETEER_EXECUTABLE_PATH
+                if (!isSafeBrowserExecutable(executablePath)) {
+                    throw new Error(`Invalid or unsafe browser executable path: ${executablePath || 'undefined'}. `)
+                }
 
                 const config: PuppeteerWebBaseLoaderOptions = {
                     launchOptions: {
                         args: ['--no-sandbox'],
                         headless: 'new',
+                        executablePath: executablePath
                         executablePath: executablePath
                     }
                 }

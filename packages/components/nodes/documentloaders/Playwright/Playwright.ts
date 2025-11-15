@@ -10,6 +10,7 @@ import { test } from 'linkifyjs'
 import { omit } from 'lodash'
 import { handleEscapeCharacters, INodeOutputsValue, webCrawl, xmlScrape } from '../../../src'
 import { ICommonObject, INode, INodeData, INodeParams } from '../../../src/Interface'
+import { isSafeBrowserExecutable } from '../../../src/validator'
 
 class Playwright_DocumentLoaders implements INode {
     label: string
@@ -192,11 +193,15 @@ class Playwright_DocumentLoaders implements INode {
                 let docs = []
 
                 const executablePath = process.env.PLAYWRIGHT_EXECUTABLE_PATH
+                if (!isSafeBrowserExecutable(executablePath)) {
+                    throw new Error(`Invalid or unsafe browser executable path: ${executablePath || 'undefined'}. `)
+                }
 
                 const config: PlaywrightWebBaseLoaderOptions = {
                     launchOptions: {
                         args: ['--no-sandbox'],
                         headless: true,
+                        executablePath: executablePath
                         executablePath: executablePath
                     }
                 }
