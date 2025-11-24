@@ -1,0 +1,721 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "PlayBarcelona WordPress API",
+    "description": "WordPress REST API for posts, pages, and categories",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://Domain.com/wp-json/wp/v2",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/posts": {
+      "get": {
+        "summary": "List posts",
+        "operationId": "getPosts",
+        "parameters": [
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "categories",
+            "in": "query",
+            "description": "Filter by category IDs (comma-separated)",
+            "schema": {
+              "type": "string"
+            },
+            "example": "12,34"
+          },
+          {
+            "name": "_fields",
+            "in": "query",
+            "description": "Limit response fields (comma-separated)",
+            "schema": {
+              "type": "string"
+            },
+            "example": "id,title,content,excerpt,categories,status"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "Post status",
+            "schema": {
+              "type": "string",
+              "enum": ["publish", "draft", "pending", "private"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Post"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new post",
+        "operationId": "createPost",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Post created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Post"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/posts/{id}": {
+      "get": {
+        "summary": "Get a specific post",
+        "operationId": "getPost",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Post"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Post not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a post",
+        "operationId": "updatePost",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Post updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Post"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Post not found"
+          }
+        }
+      }
+    },
+    "/pages": {
+      "get": {
+        "summary": "List pages",
+        "operationId": "getPages",
+        "parameters": [
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "_fields",
+            "in": "query",
+            "description": "Limit response fields",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "enum": ["publish", "draft", "pending", "private"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Page"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new page",
+        "operationId": "createPage",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Page created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/pages/{id}": {
+      "get": {
+        "summary": "Get a specific page",
+        "operationId": "getPage",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Page not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a page",
+        "operationId": "updatePage",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PageInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Page updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Page not found"
+          }
+        }
+      }
+    },
+    "/categories": {
+      "get": {
+        "summary": "List categories",
+        "operationId": "getCategories",
+        "parameters": [
+          {
+            "name": "per_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "slug",
+            "in": "query",
+            "description": "Filter by category slug",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Category"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a new category",
+        "operationId": "createCategory",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Category created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "400": {
+            "description": "Bad request (e.g., category already exists)"
+          }
+        }
+      }
+    },
+    "/categories/{id}": {
+      "get": {
+        "summary": "Get a specific category",
+        "operationId": "getCategory",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Category not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update a category",
+        "operationId": "updateCategory",
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Category not found"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "basicAuth": {
+        "type": "http",
+        "scheme": "basic",
+        "description": "WordPress username and password"
+      }
+    },
+    "schemas": {
+      "PostInput": {
+        "type": "object",
+        "required": ["title", "content"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "Post title",
+            "example": "Best Tapas Bars in Barcelona"
+          },
+          "content": {
+            "type": "string",
+            "description": "Post content (HTML allowed)",
+            "example": "<p>Discover the best tapas bars...</p>"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Array of category IDs",
+            "example": [12, 34]
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "publish", "pending", "private"],
+            "default": "draft",
+            "description": "Post status"
+          }
+        }
+      },
+      "Post": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "object",
+            "properties": {
+              "rendered": {
+                "type": "string"
+              }
+            }
+          },
+          "content": {
+            "type": "object",
+            "properties": {
+              "rendered": {
+                "type": "string"
+              }
+            }
+          },
+          "excerpt": {
+            "type": "object",
+            "properties": {
+              "rendered": {
+                "type": "string"
+              }
+            }
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "status": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modified": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "link": {
+            "type": "string"
+          }
+        }
+      },
+      "PageInput": {
+        "type": "object",
+        "required": ["title", "content"],
+        "properties": {
+          "title": {
+            "type": "string",
+            "example": "About Us"
+          },
+          "content": {
+            "type": "string",
+            "example": "<p>Welcome to PlayBarcelona...</p>"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["draft", "publish", "pending", "private"],
+            "default": "draft"
+          }
+        }
+      },
+      "Page": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "object",
+            "properties": {
+              "rendered": {
+                "type": "string"
+              }
+            }
+          },
+          "content": {
+            "type": "object",
+            "properties": {
+              "rendered": {
+                "type": "string"
+              }
+            }
+          },
+          "status": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "modified": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "link": {
+            "type": "string"
+          }
+        }
+      },
+      "CategoryInput": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Category name",
+            "example": "Food & Drink"
+          },
+          "slug": {
+            "type": "string",
+            "description": "Category slug (auto-generated if not provided)",
+            "example": "food-drink"
+          },
+          "description": {
+            "type": "string",
+            "description": "Category description",
+            "example": "Posts about restaurants, bars, and culinary experiences"
+          },
+          "parent": {
+            "type": "integer",
+            "description": "Parent category ID (for hierarchical categories)",
+            "example": 0
+          }
+        }
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "parent": {
+            "type": "integer"
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of posts in this category"
+          },
+          "link": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
