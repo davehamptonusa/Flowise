@@ -1,5 +1,5 @@
 import PropTypes from 'prop-types'
-import { useState, useContext } from 'react'
+import { useState, useContext, useEffect } from 'react'
 import { useSelector } from 'react-redux'
 
 // material-ui
@@ -23,6 +23,9 @@ import ManageScrapedLinksDialog from '@/ui-component/dialog/ManageScrapedLinksDi
 import CredentialInputHandler from '@/views/canvas/CredentialInputHandler'
 import { flowContext } from '@/store/context/ReactFlowContext'
 
+// API
+import credentialsApi from '@/api/credentials'
+
 // const
 import { FLOWISE_CREDENTIAL_ID } from '@/store/constant'
 
@@ -38,6 +41,7 @@ const DocStoreInputHandler = ({ inputParam, data, disabled = false, onNodeDataCh
     const [showManageScrapedLinksDialog, setShowManageScrapedLinksDialog] = useState(false)
     const [manageScrapedLinksDialogProps, setManageScrapedLinksDialogProps] = useState({})
     const [reloadTimestamp, setReloadTimestamp] = useState(Date.now().toString())
+    const [isVertexCredential, setIsVertexCredential] = useState(false)
 
     const handleDataChange = ({ inputParam, newValue }) => {
         data.inputs[inputParam.name] = newValue
@@ -90,6 +94,39 @@ const DocStoreInputHandler = ({ inputParam, data, disabled = false, onNodeDataCh
         }
         return {}
     }
+
+    // Check if credential is Vertex (googleVertexAuth) for includeSharedDrives field
+    useEffect(() => {
+        const checkCredentialType = async () => {
+            if (inputParam?.name === 'includeSharedDrives' && data?.name === 'googleDrive') {
+                const credentialId = data.inputs?.credential || data.inputs?.[FLOWISE_CREDENTIAL_ID]
+                if (credentialId) {
+                    try {
+                        const credentialResp = await credentialsApi.getSpecificCredential(credentialId)
+                        if (credentialResp?.data?.credentialName === 'googleVertexAuth') {
+                            setIsVertexCredential(true)
+                            // Force includeSharedDrives to true for Vertex credentials
+                            if (!data.inputs.includeSharedDrives) {
+                                data.inputs.includeSharedDrives = true
+                                if (nodeDataChangeHandler) {
+                                    nodeDataChangeHandler({ nodeId: data.id, inputParam, newValue: true })
+                                }
+                            }
+                        } else {
+                            setIsVertexCredential(false)
+                        }
+                    } catch (error) {
+                        console.error('Error fetching credential:', error)
+                        setIsVertexCredential(false)
+                    }
+                } else {
+                    setIsVertexCredential(false)
+                }
+            }
+        }
+        checkCredentialType()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.inputs?.credential, data.inputs?.[FLOWISE_CREDENTIAL_ID], inputParam?.name, data?.name])
 
     return (
         <div>
@@ -160,9 +197,22 @@ const DocStoreInputHandler = ({ inputParam, data, disabled = false, onNodeDataCh
                         )}
                         {inputParam.type === 'boolean' && (
                             <SwitchInput
-                                disabled={disabled}
-                                onChange={(newValue) => handleDataChange({ inputParam, newValue })}
-                                value={data.inputs[inputParam.name] ?? inputParam.default ?? false}
+                                disabled={
+                                    disabled ||
+                                    (inputParam.name === 'includeSharedDrives' && data?.name === 'googleDrive' && isVertexCredential)
+                                }
+                                onChange={(newValue) => {
+                                    // Prevent toggling off for Vertex credentials
+                                    if (inputParam.name === 'includeSharedDrives' && data?.name === 'googleDrive' && isVertexCredential) {
+                                        return // Do nothing, keep it true
+                                    }
+                                    handleDataChange({ inputParam, newValue })
+                                }}
+                                value={
+                                    inputParam.name === 'includeSharedDrives' && data?.name === 'googleDrive' && isVertexCredential
+                                        ? true
+                                        : data.inputs[inputParam.name] ?? inputParam.default ?? false
+                                }
                             />
                         )}
                         {inputParam.type === 'datagrid' && (
