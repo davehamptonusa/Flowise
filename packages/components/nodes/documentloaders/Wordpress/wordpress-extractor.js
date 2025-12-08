@@ -24,7 +24,7 @@ const USER_CONFIG = {
   filterPath: filterPath,
   getProtected: getProtected,
   includeTribeEvents: includeTribeEvents,
-  
+
   // Content configuration
   charsPerToken: 4,           // Approximate characters per token for estimation
 };
@@ -36,10 +36,10 @@ const SYSTEM_CONFIG = {
     protocol: 'https://public-api.wordpress.com',
     basePath: '/rest/v1.1/sites/',
   },
-  
+
   // Content configuration
   defaultTitle: 'Untitled',
-  
+
   // Chunking configuration
   chunking: {
     maxTokens: 1000,        // Posts larger than this will be chunked
@@ -90,7 +90,7 @@ async function main() {
     if (config.includePages) extractionTypes.push('pages');
     if (config.includeTribeEvents) extractionTypes.push('tribe events');
     const extractionTypeStr = extractionTypes.join(', ') || 'content';
-    
+
     console.error(`Starting WordPress ${extractionTypeStr} extraction...`);
     console.error('Validating configuration...');
     validateConfig(config);
@@ -139,16 +139,16 @@ function daysToISO8601(days) {
  */
 async function fetchPostById(postId, config, axiosHeaders) {
   const params = ['fields=ID,title,URL,modified,date,content'];
-  
+
   // Add context=edit parameter if getProtected is true
   if (config.getProtected) {
     params.unshift('context=edit');
   }
-  
+
   // Use siteID if provided, otherwise use siteDomain
   const siteIdentifier = config.siteID || config.siteDomain;
   const postUri = `${config.api.protocol}${config.api.basePath}${siteIdentifier}/posts/${postId}?${params.join('&')}`;
-    
+
   try {
     const resp = await axios.get(postUri, { headers: axiosHeaders });
     const data = resp.data;
@@ -206,7 +206,7 @@ function extractBlockReferences(content) {
   const blockPattern = /<!--\s*wp:block\s+(\{[^}]*"ref"\s*:\s*(\d+)[^}]*\})\s*\/-->/g;
   const references = [];
   let match;
-  
+
   while ((match = blockPattern.exec(content)) !== null) {
     try {
       const jsonStr = match[1];
@@ -223,7 +223,7 @@ function extractBlockReferences(content) {
       console.error(`Failed to parse block reference: ${match[0]}`, e.message);
     }
   }
-  
+
   return references;
 }
 
@@ -236,21 +236,21 @@ async function resolveBlockReferences(content, config, axiosHeaders, visitedRefs
     console.error('Maximum recursion depth reached for block references');
     return content;
   }
-  
+
   let references = extractBlockReferences(content);
-  
+
   if (references.length === 0) {
     return content;
   }
-  
+
   // Build result by processing references in order
   let result = '';
   let lastIndex = 0;
-  
+
   for (const ref of references) {
     // Add content before this reference
     result += content.substring(lastIndex, ref.startIndex);
-    
+
     // Skip if we've already visited this ref to prevent circular references
     if (visitedRefs.has(ref.ref)) {
       console.error(`Circular reference detected for ref ${ref.ref}, skipping`);
@@ -258,44 +258,44 @@ async function resolveBlockReferences(content, config, axiosHeaders, visitedRefs
       lastIndex = ref.endIndex;
       continue;
     }
-    
+
     // Mark this ref as visited
     visitedRefs.add(ref.ref);
-    
+
     // Fetch the referenced post
     const blockPost = await fetchPostById(ref.ref, config, axiosHeaders);
-    
+
     if (blockPost && blockPost.content) {
       // Recursively resolve any nested block references
       const resolvedBlockContent = await resolveBlockReferences(
-        blockPost.content, 
-        config, 
-        axiosHeaders, 
-        new Set(visitedRefs), 
+        blockPost.content,
+        config,
+        axiosHeaders,
+        new Set(visitedRefs),
         depth + 1
       );
-      
+
       // Add the resolved content
       result += resolvedBlockContent;
     }
     // If block not found, we just skip it (don't add anything)
-    
+
     // Remove from visited set after processing
     visitedRefs.delete(ref.ref);
-    
+
     lastIndex = ref.endIndex;
   }
-  
+
   // Add remaining content after last reference
   result += content.substring(lastIndex);
-  
+
   // Check if there are any remaining references after replacement
   const remainingRefs = extractBlockReferences(result);
   if (remainingRefs.length > 0) {
     // Recursively resolve any new references that may have been introduced
     return await resolveBlockReferences(result, config, axiosHeaders, visitedRefs, depth + 1);
   }
-  
+
   return result;
 }
 
@@ -316,22 +316,22 @@ async function fetchTribeEventsPage(config, page = 1) {
   if (domain.startsWith('http://') || domain.startsWith('https://')) {
     domain = domain.replace(/^https?:\/\//, '');
   }
-  
+
   let eventsUri = `https://${domain}/wp-json/tribe/events/v1/events`;
-  
+
   // Build query parameters
   const params = [];
-  
+
   // Always include per_page parameter
   const perPage = config.number || 100;
   params.push(`per_page=${perPage}`);
-  
+
   // Include page parameter for pagination
   params.push(`page=${page}`);
-  
+
   // Include _tribe_event_fields=all to get all event fields
   params.push(`_tribe_event_fields=all`);
-  
+
   // Tribe Events API automatically filters by date range (default is ~2 years)
   // To get all events, we need to set a wide date range
   // If modifiedAfterDays is provided, use it as the start date
@@ -350,7 +350,7 @@ async function fetchTribeEventsPage(config, page = 1) {
     pastDate.setFullYear(pastDate.getFullYear() - 10);
     const futureDate = new Date(now);
     futureDate.setFullYear(futureDate.getFullYear() + 10);
-    
+
     // Format as YYYY-MM-DD HH:MM:SS (Tribe Events API format)
     const formatDate = (date) => {
       const year = date.getFullYear();
@@ -358,16 +358,16 @@ async function fetchTribeEventsPage(config, page = 1) {
       const day = String(date.getDate()).padStart(2, '0');
       return `${year}-${month}-${day} 00:00:00`;
     };
-    
+
     params.push(`start_date=${encodeURIComponent(formatDate(pastDate))}`);
     params.push(`end_date=${encodeURIComponent(formatDate(futureDate))}`);
   }
-  
+
   // Always append query string (per_page is always included)
   eventsUri += `?${params.join('&')}`;
-  
+
   console.error(`Fetching tribe events page ${page}: ${eventsUri}`);
-  
+
   try {
     // No authentication headers needed
     const resp = await axios.get(eventsUri);
@@ -380,7 +380,7 @@ async function fetchTribeEventsPage(config, page = 1) {
     // The Tribe Events API v1 returns an object with an 'events' array
     if (data && data.events && Array.isArray(data.events)) {
       events = data.events;
-      
+
       // Debug: Log response structure on first page to understand pagination
       if (page === 1) {
         console.error(`Tribe Events API response structure (page 1):`, JSON.stringify({
@@ -393,7 +393,7 @@ async function fetchTribeEventsPage(config, page = 1) {
           per_page: data.per_page
         }, null, 2));
       }
-      
+
       // Check for pagination metadata in the response
       // Some APIs include total, total_pages, or similar fields
       if (data.total !== undefined) {
@@ -463,7 +463,7 @@ async function fetchTribeEvents(config) {
 
   while (hasMore) {
     const result = await fetchTribeEventsPage(config, currentPage);
-    
+
     if (result.events && result.events.length > 0) {
       allEvents.push(...result.events);
       console.error(`Fetched ${result.events.length} events from page ${currentPage} (total so far: ${allEvents.length})`);
@@ -496,13 +496,13 @@ async function transformTribeEvent(event, config) {
   const eventUrl = event.url || event.link || '';
   const title = event.title || config.defaultTitle;
   const eventId = String(event.id || '');
-  
+
   // Use description as content (full description, not stripped)
   let rawContent = event.description || '';
-  
+
   // Convert HTML to Markdown
   rawContent = htmlToMarkdown(rawContent);
-  
+
   // Prepend title to content (consistent with posts/pages)
   const content = `${title}\n\n${rawContent}`;
   const tokenSize = Math.ceil(content.length / config.charsPerToken);
@@ -515,8 +515,8 @@ async function transformTribeEvent(event, config) {
   const venueId = event.venue?.id || null;
 
   // Extract organizer information (organizer is an array)
-  const organizerId = event.organizer && Array.isArray(event.organizer) && event.organizer.length > 0 
-    ? event.organizer[0].id || null 
+  const organizerId = event.organizer && Array.isArray(event.organizer) && event.organizer.length > 0
+    ? event.organizer[0].id || null
     : null;
 
   // Extract event-specific dates
@@ -566,7 +566,7 @@ async function transformTribeEvent(event, config) {
 
   // Event needs chunking
   const chunks = chunkContent(content, config.chunking.chunkSize, config.chunking.overlap, config.charsPerToken);
-  
+
   return chunks.map(chunk => ({
     pageContent: chunk.content,
     metadata: {
@@ -594,40 +594,40 @@ async function fetchPostsPage(config, axiosHeaders, contentType, page = 1) {
   const siteIdentifier = config.siteID || config.siteDomain;
   // Path always uses /posts endpoint
   let postsUri = `${config.api.protocol}${config.api.basePath}${siteIdentifier}/posts`;
-  
+
   // Build query parameters
   const params = [];
   const perPage = config.number || 100;
   params.push(`number=${perPage}`);
-  
+
   // WordPress.com API v1.1 uses offset for pagination
   // Page 1 = offset 0, Page 2 = offset perPage, etc.
   const offset = (page - 1) * perPage;
   params.push(`offset=${offset}`);
-  
+
   // Add context=edit parameter if getProtected is true
   if (config.getProtected) {
     params.push('context=edit');
   }
-  
-  params.push('fields=ID,title,URL,modified,date,content');
-  
+
+  params.push('fields=ID,title,URL,modified,date,content,categories');
+
   // Add type parameter (post or page)
   params.push(`type=${contentType}`);
-  
+
   // Add modified_after if provided
   const modifiedAfter = daysToISO8601(config.modifiedAfterDays);
   if (modifiedAfter) {
     params.push(`modified_after=${encodeURIComponent(modifiedAfter)}`);
   }
-  
+
   // Append query string if we have parameters
   if (params.length > 0) {
     postsUri += `?${params.join('&')}`;
   }
-  
+
   console.error(`Fetching ${contentType}s page ${page} (offset ${offset}): ${postsUri}`);
-  
+
   try {
     const resp = await axios.get(postsUri, { headers: axiosHeaders });
     const data = resp.data;
@@ -704,7 +704,7 @@ async function fetchAllPosts(config, axiosHeaders, contentType) {
 
   while (hasMore) {
     const result = await fetchPostsPage(config, axiosHeaders, contentType, currentPage);
-    
+
     if (result.posts && result.posts.length > 0) {
       allPosts.push(...result.posts);
       console.error(`Fetched ${result.posts.length} ${contentType}s from page ${currentPage} (total so far: ${allPosts.length}${result.found > 0 ? ` of ${result.found}` : ''})`);
@@ -749,14 +749,14 @@ function htmlToMarkdown(content) {
   try {
     // Convert HTML to Markdown
     let markdown = nhm.translate(content);
-    
+
     // Clean up extra whitespace
     // Replace multiple spaces with single space, but preserve line breaks
     markdown = markdown.replace(/[ \t]+/g, ' ');
     // Remove excessive newlines (3+ newlines become 2)
     markdown = markdown.replace(/\n{3,}/g, '\n\n');
     markdown = markdown.trim();
-    
+
     return markdown;
   } catch (error) {
     console.error('Error converting HTML to Markdown:', error.message);
@@ -773,27 +773,27 @@ function chunkContent(content, chunkSize, overlap, charsPerToken) {
   const contentLength = content.length;
   const chunkCharSize = chunkSize * charsPerToken;
   const overlapCharSize = overlap * charsPerToken;
-  
+
   let start = 0;
   let chunkIndex = 0;
-  
+
   while (start < contentLength) {
     const end = Math.min(start + chunkCharSize, contentLength);
     const chunk = content.substring(start, end);
-    
+
     chunks.push({
       content: chunk,
       index: chunkIndex,
       tokenSize: Math.ceil(chunk.length / charsPerToken)
     });
-    
+
     chunkIndex++;
-    
+
     // Move start position, accounting for overlap
     if (end >= contentLength) break;
     start = end - overlapCharSize;
   }
-  
+
   return chunks;
 }
 
@@ -805,22 +805,32 @@ async function transformPost(post, config, axiosHeaders, contentType = 'post') {
   const postUrl = post.URL || '';
   const title = post.title || config.defaultTitle;
   let rawContent = post.content || '';
-  
+
   // Resolve wp:block references recursively
   rawContent = await resolveBlockReferences(rawContent, config, axiosHeaders);
-  
+
   // Convert HTML to Markdown
   rawContent = htmlToMarkdown(rawContent);
-  
+
   // Prepend title to content
   const content = `${title}\n\n${rawContent}`;
   const tokenSize = Math.ceil(content.length / config.charsPerToken);
   // ID is site_ID + ID
   const postId = `${post.site_ID || ''}${post.ID || ''}`;
-  
+
   // Extract dates
   const createdDate = post.date || null;
   const modifiedDate = post.modified || null;
+
+  // Extract category IDs
+  let categoryIDs = [];
+  if (post.categories) {
+    if (Array.isArray(post.categories)) {
+      categoryIDs = post.categories.map(cat => cat.ID || cat.id).filter(id => id !== undefined && id !== null);
+    } else if (typeof post.categories === 'object') {
+      categoryIDs = Object.values(post.categories).map(cat => cat.ID || cat.id).filter(id => id !== undefined && id !== null);
+    }
+  }
 
   // Base metadata
   const baseMetadata = {
@@ -830,6 +840,7 @@ async function transformPost(post, config, axiosHeaders, contentType = 'post') {
     type: contentType,
     createdDate: createdDate,
     modifiedDate: modifiedDate,
+    categoryIDs: categoryIDs,
   };
 
   // If post is small enough, return as single document
@@ -844,7 +855,7 @@ async function transformPost(post, config, axiosHeaders, contentType = 'post') {
 
   // Post needs chunking
   const chunks = chunkContent(content, config.chunking.chunkSize, config.chunking.overlap, config.charsPerToken);
-  
+
   return chunks.map(chunk => ({
     pageContent: chunk.content,
     metadata: {
@@ -882,7 +893,7 @@ async function extractAllPosts(config) {
   // Helper function to process posts/pages
   async function processContentItems(items, contentType) {
     console.error(`Processing ${items.length} ${contentType}s...`);
-    
+
     // Print items with content truncated to 100 characters
     console.error(`\n${contentType.charAt(0).toUpperCase() + contentType.slice(1)}s:`);
     items.forEach((item, index) => {
@@ -899,7 +910,7 @@ async function extractAllPosts(config) {
       const transformedChunks = await transformPost(item, config, axiosHeaders, contentType);
       const originalContent = `${item.title || ''}\n\n${item.content || ''}`;
       const originalTokenSize = Math.ceil(originalContent.length / config.charsPerToken);
-      
+
       // Process each chunk (will be 1 chunk for small items)
       for (const chunk of transformedChunks) {
         // Track token sizes for summary (only original items, not individual chunks)
@@ -910,7 +921,7 @@ async function extractAllPosts(config) {
             id: chunk.metadata.id
           });
         }
-        
+
         // Track chunked items for summary
         if (chunk.isChunked && chunk.chunkIndex === 1) {
           // Only track once per original item
@@ -921,7 +932,7 @@ async function extractAllPosts(config) {
             totalChunks: chunk.totalChunks,
             chunkSizes: transformedChunks.map(c => c.tokenSize)
           });
-          
+
           // Add to token sizes summary with original size
           tokenSizes.push({
             title: item.title || 'Untitled',
@@ -929,13 +940,13 @@ async function extractAllPosts(config) {
             id: chunk.originalId
           });
         }
-        
+
         // Remove chunking metadata from final output
         const finalChunk = {
           pageContent: chunk.pageContent,
           metadata: chunk.metadata
         };
-        
+
         allTransformedPosts.push(finalChunk);
       }
     }
@@ -948,7 +959,7 @@ async function extractAllPosts(config) {
     try {
       let posts = await fetchAllPosts(config, axiosHeaders, 'post');
       console.error(`Fetched ${posts.length} posts...`);
-      
+
       // Filter posts by filterPath if configured
       if (config.filterPath && config.filterPath !== '') {
         const beforeFilterCount = posts.length;
@@ -958,7 +969,7 @@ async function extractAllPosts(config) {
         });
         console.error(`Filtered to ${posts.length} posts matching filterPath: "${config.filterPath}" (removed ${beforeFilterCount - posts.length})`);
       }
-      
+
       await processContentItems(posts, 'post');
     } catch (error) {
       console.error(`Error processing posts:`, error.message);
@@ -973,7 +984,7 @@ async function extractAllPosts(config) {
     try {
       let pages = await fetchAllPosts(config, axiosHeaders, 'page');
       console.error(`Fetched ${pages.length} pages...`);
-      
+
       // Filter pages by filterPath if configured
       if (config.filterPath && config.filterPath !== '') {
         const beforeFilterCount = pages.length;
@@ -983,7 +994,7 @@ async function extractAllPosts(config) {
         });
         console.error(`Filtered to ${pages.length} pages matching filterPath: "${config.filterPath}" (removed ${beforeFilterCount - pages.length})`);
       }
-      
+
       await processContentItems(pages, 'page');
     } catch (error) {
       console.error(`Error processing pages:`, error.message);
@@ -998,29 +1009,29 @@ async function extractAllPosts(config) {
     try {
       let events = await fetchTribeEvents(config);
       console.error(`Fetched ${events.length} tribe events...`);
-      
+
       console.error(`Processing ${events.length} tribe events...`);
-      
+
       // Print tribe events with key fields (description truncated to 100 chars for display)
       console.error('\nTribe Events:');
       events.forEach((event, index) => {
         const title = event.title || 'Untitled';
         const description = event.description || '';
         const truncatedDescription = description.length > 100 ? description.substring(0, 100) + '...' : description;
-        
+
         // Extract key fields for display
         const venueId = event.venue?.id || 'N/A';
         const venueName = event.venue?.venue || 'N/A';
-        const organizerId = event.organizer && Array.isArray(event.organizer) && event.organizer.length > 0 
-          ? event.organizer[0].id || 'N/A' 
+        const organizerId = event.organizer && Array.isArray(event.organizer) && event.organizer.length > 0
+          ? event.organizer[0].id || 'N/A'
           : 'N/A';
-        const organizerName = event.organizer && Array.isArray(event.organizer) && event.organizer.length > 0 
-          ? event.organizer[0].organizer || 'N/A' 
+        const organizerName = event.organizer && Array.isArray(event.organizer) && event.organizer.length > 0
+          ? event.organizer[0].organizer || 'N/A'
           : 'N/A';
         const categoryNames = event.categories && Array.isArray(event.categories)
           ? event.categories.map(cat => cat.name).filter(name => name).join(', ') || 'N/A'
           : 'N/A';
-        
+
         console.error(`${index + 1}. Title: "${title}"`);
         console.error(`   ID: ${event.id || 'N/A'}`);
         console.error(`   URL: ${event.url || event.link || 'N/A'}`);
@@ -1041,7 +1052,7 @@ async function extractAllPosts(config) {
         const description = event.description || '';
         const originalContent = `${title}\n\n${description}`;
         const originalTokenSize = Math.ceil(originalContent.length / config.charsPerToken);
-        
+
         // Process each chunk (will be 1 chunk for small events)
         for (const chunk of transformedChunks) {
           // Track token sizes for summary (only original events, not individual chunks)
@@ -1052,7 +1063,7 @@ async function extractAllPosts(config) {
               id: chunk.metadata.id
             });
           }
-          
+
           // Track chunked events for summary
           if (chunk.isChunked && chunk.chunkIndex === 1) {
             // Only track once per original event
@@ -1063,7 +1074,7 @@ async function extractAllPosts(config) {
               totalChunks: chunk.totalChunks,
               chunkSizes: transformedChunks.map(c => c.tokenSize)
             });
-            
+
             // Add to token sizes summary with original size
             tokenSizes.push({
               title: title || 'Untitled',
@@ -1071,13 +1082,13 @@ async function extractAllPosts(config) {
               id: chunk.originalId
             });
           }
-          
+
           // Remove chunking metadata from final output
           const finalChunk = {
             pageContent: chunk.pageContent,
             metadata: chunk.metadata
           };
-          
+
           allTransformedPosts.push(finalChunk);
         }
       }
@@ -1091,7 +1102,7 @@ async function extractAllPosts(config) {
   const largest5 = tokenSizes
     .sort((a, b) => b.tokenSize - a.tokenSize)
     .slice(0, 5);
-  
+
   console.error('\nLargest 5 posts by token size:');
   largest5.forEach((item, index) => {
     console.error(`${index + 1}. "${item.title}" - ${item.tokenSize} tokens (ID: ${item.id})`);
