@@ -198,7 +198,6 @@ class Playwright_DocumentLoaders implements INode {
                         args: ['--no-sandbox'],
                         headless: true,
                         executablePath: executablePath
-                        executablePath: executablePath
                     }
                 }
                 if (waitUntilGoToOption) {

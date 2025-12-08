@@ -189,7 +189,6 @@ class Puppeteer_DocumentLoaders implements INode {
                         args: ['--no-sandbox'],
                         headless: 'new',
                         executablePath: executablePath
-                        executablePath: executablePath
                     }
                 }
                 if (waitUntilGoToOption) {
