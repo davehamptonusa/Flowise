@@ -1,7 +1,7 @@
 import { omit } from 'lodash'
 import axios from 'axios'
 import { ICommonObject, IDocument, INode, INodeData, INodeParams, INodeOutputsValue } from '../../../src/Interface'
-import { getCredentialData, getCredentialParam, handleEscapeCharacters } from '../../../src'
+import { getCredentialData, getCredentialParam, handleDocumentLoaderMetadata, handleEscapeCharacters } from '../../../src'
 
 interface ZendeskConfig {
     zendeskDomain: string
@@ -430,29 +430,7 @@ class Zendesk_DocumentLoaders implements INode {
         let docs: IDocument[] = await this.extractAllArticles(config)
 
         // Apply metadata handling
-        let parsedMetadata = {}
-
-        if (metadata) {
-            try {
-                parsedMetadata = typeof metadata === 'object' ? metadata : JSON.parse(metadata)
-            } catch (error) {
-                throw new Error(`Error parsing Additional Metadata: ${error.message}`)
-            }
-        }
-
-        docs = docs.map((doc) => ({
-            ...doc,
-            metadata:
-                _omitMetadataKeys === '*'
-                    ? { ...parsedMetadata }
-                    : omit(
-                          {
-                              ...doc.metadata,
-                              ...parsedMetadata
-                          },
-                          omitMetadataKeys
-                      )
-        }))
+        docs = handleDocumentLoaderMetadata(docs, _omitMetadataKeys, metadata)
 
         if (output === 'document') {
             return docs

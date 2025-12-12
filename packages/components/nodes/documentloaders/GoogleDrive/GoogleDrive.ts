@@ -5,6 +5,7 @@ import {
     convertMultiOptionsToStringArray,
     getCredentialData,
     getCredentialParam,
+    handleDocumentLoaderMetadata,
     handleEscapeCharacters,
     INodeOutputsValue,
     refreshOAuth2Token
@@ -498,37 +499,7 @@ class GoogleDrive_DocumentLoaders implements INode {
             }
 
             // Apply metadata transformations
-            if (metadata) {
-                const parsedMetadata = typeof metadata === 'object' ? metadata : JSON.parse(metadata)
-                docs = docs.map((doc) => ({
-                    ...doc,
-                    metadata:
-                        _omitMetadataKeys === '*'
-                            ? {
-                                  ...parsedMetadata
-                              }
-                            : omit(
-                                  {
-                                      ...doc.metadata,
-                                      ...parsedMetadata
-                                  },
-                                  omitMetadataKeys
-                              )
-                }))
-            } else {
-                docs = docs.map((doc) => ({
-                    ...doc,
-                    metadata:
-                        _omitMetadataKeys === '*'
-                            ? {}
-                            : omit(
-                                  {
-                                      ...doc.metadata
-                                  },
-                                  omitMetadataKeys
-                              )
-                }))
-            }
+            docs = handleDocumentLoaderMetadata(docs, _omitMetadataKeys, metadata)
         } catch (error) {
             throw new Error(`Failed to load Google Drive documents: ${error.message}`)
         }
